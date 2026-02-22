@@ -1,0 +1,4 @@
+interface:
+  display_name: "Setup Atlassian MCP"
+  short_description: "Wire Docker Atlassian MCP into NanoClaw."
+  default_prompt: "Set up Docker Desktop Atlassian MCP for NanoClaw, sync configs, restart, and verify end-to-end."

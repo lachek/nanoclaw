@@ -57,20 +57,36 @@ describe('ensureContainerRuntimeRunning', () => {
     expect(mockExecSync).toHaveBeenCalledTimes(1);
     expect(mockExecSync).toHaveBeenCalledWith(
       `${CONTAINER_RUNTIME_BIN} info`,
-      { stdio: 'pipe', timeout: 10000 },
+      {
+        stdio: ['ignore', 'pipe', 'pipe'],
+        encoding: 'utf-8',
+        timeout: 10000,
+      },
     );
     expect(logger.debug).toHaveBeenCalledWith('Container runtime already running');
   });
 
-  it('throws when docker info fails', () => {
+  it('throws when docker info fails and logs compact details', () => {
+    const err = Object.assign(new Error('Cannot connect to the Docker daemon'), {
+      stderr: 'permission denied while trying to connect to the Docker daemon socket',
+      code: 'EPERM',
+    });
     mockExecSync.mockImplementationOnce(() => {
-      throw new Error('Cannot connect to the Docker daemon');
+      throw err;
     });
 
     expect(() => ensureContainerRuntimeRunning()).toThrow(
       'Container runtime is required but failed to start',
     );
-    expect(logger.error).toHaveBeenCalled();
+    expect(logger.error).toHaveBeenCalledWith(
+      expect.objectContaining({
+        runtime: CONTAINER_RUNTIME_BIN,
+        code: 'EPERM',
+        message: 'Cannot connect to the Docker daemon',
+        stderr: 'permission denied while trying to connect to the Docker daemon socket',
+      }),
+      'Failed to reach container runtime',
+    );
   });
 });
 
@@ -90,12 +106,12 @@ describe('cleanupOrphans', () => {
     expect(mockExecSync).toHaveBeenNthCalledWith(
       2,
       `${CONTAINER_RUNTIME_BIN} stop nanoclaw-group1-111`,
-      { stdio: 'pipe' },
+      { stdio: ['ignore', 'pipe', 'pipe'] },
     );
     expect(mockExecSync).toHaveBeenNthCalledWith(
       3,
       `${CONTAINER_RUNTIME_BIN} stop nanoclaw-group2-222`,
-      { stdio: 'pipe' },
+      { stdio: ['ignore', 'pipe', 'pipe'] },
     );
     expect(logger.info).toHaveBeenCalledWith(
       { count: 2, names: ['nanoclaw-group1-111', 'nanoclaw-group2-222'] },
@@ -120,7 +136,9 @@ describe('cleanupOrphans', () => {
     cleanupOrphans(); // should not throw
 
     expect(logger.warn).toHaveBeenCalledWith(
-      expect.objectContaining({ err: expect.any(Error) }),
+      expect.objectContaining({
+        err: expect.objectContaining({ message: 'docker not available' }),
+      }),
       'Failed to clean up orphaned containers',
     );
   });
