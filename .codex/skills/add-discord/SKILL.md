@@ -1,3 +1,8 @@
+---
+name: add-discord
+description: Add Discord support to NanoClaw using the skills engine for deterministic code changes, then guide interactive setup.
+---
+
 # Add Discord Channel
 
 This skill adds Discord support to NanoClaw using the skills engine for deterministic code changes, then walks through interactive setup.
