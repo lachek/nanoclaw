@@ -84,6 +84,16 @@ if [ -f "$PROJECT_ROOT/.env" ]; then
     CREDENTIALS="configured"
   fi
 fi
+
+# OAuth auth from Codex CLI also counts as configured credentials.
+# Prefer per-group profile first (what containers use), then host profile.
+if [ "$CREDENTIALS" = "missing" ]; then
+  if find "$PROJECT_ROOT/data/sessions" -type f -path "*/.codex/auth.json" -print -quit 2>/dev/null | grep -q .; then
+    CREDENTIALS="configured_oauth"
+  elif [ -f "$HOME/.codex/auth.json" ]; then
+    CREDENTIALS="configured_oauth"
+  fi
+fi
 log "Credentials: $CREDENTIALS"
 
 # 4. Check WhatsApp auth

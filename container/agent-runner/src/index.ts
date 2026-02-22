@@ -16,7 +16,7 @@
 
 import fs from 'fs';
 import path from 'path';
-import { query } from '@openai/codex-sdk';
+import { Codex, Thread, type ThreadEvent } from '@openai/codex-sdk';
 
 // Hook types compatible with Codex CLI hook system
 type HookCallback = (input: any, toolUseId: any, context: any) => Promise<Record<string, any>>;
@@ -54,52 +54,9 @@ interface SessionsIndex {
   entries: SessionEntry[];
 }
 
-interface SDKUserMessage {
-  type: 'user';
-  message: { role: 'user'; content: string };
-  parent_tool_use_id: null;
-  session_id: string;
-}
-
 const IPC_INPUT_DIR = '/workspace/ipc/input';
 const IPC_INPUT_CLOSE_SENTINEL = path.join(IPC_INPUT_DIR, '_close');
 const IPC_POLL_MS = 500;
-
-/**
- * Push-based async iterable for streaming user messages to the SDK.
- * Keeps the iterable alive until end() is called, preventing isSingleUserTurn.
- */
-class MessageStream {
-  private queue: SDKUserMessage[] = [];
-  private waiting: (() => void) | null = null;
-  private done = false;
-
-  push(text: string): void {
-    this.queue.push({
-      type: 'user',
-      message: { role: 'user', content: text },
-      parent_tool_use_id: null,
-      session_id: '',
-    });
-    this.waiting?.();
-  }
-
-  end(): void {
-    this.done = true;
-    this.waiting?.();
-  }
-
-  async *[Symbol.asyncIterator](): AsyncGenerator<SDKUserMessage> {
-    while (true) {
-      while (this.queue.length > 0) {
-        yield this.queue.shift()!;
-      }
-      if (this.done) return;
-      await new Promise<void>(r => { this.waiting = r; });
-      this.waiting = null;
-    }
-  }
-}
 
 async function readStdin(): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -169,7 +126,7 @@ function createPreCompactHook(): HookCallback {
         return {};
       }
 
-      const summary = getSessionSummary(sessionId, transcriptPath);
+      const summary = sessionId ? getSessionSummary(sessionId, transcriptPath) : null;
       const name = summary ? sanitizeFilename(summary) : generateFallbackName();
 
       const conversationsDir = '/workspace/group/conversations';
@@ -333,11 +290,28 @@ function waitForIpcMessage(): Promise<string | null> {
   });
 }
 
+function sanitizeEnv(env: Record<string, string | undefined>): Record<string, string> {
+  const clean: Record<string, string> = {};
+  for (const [key, value] of Object.entries(env)) {
+    if (value !== undefined) {
+      clean[key] = value;
+    }
+  }
+  return clean;
+}
+
+function getLastAssistantText(event: ThreadEvent): string | undefined {
+  if (event.type !== 'item.completed' && event.type !== 'item.updated') {
+    return undefined;
+  }
+  if (event.item.type !== 'agent_message') {
+    return undefined;
+  }
+  return event.item.text;
+}
+
 /**
- * Run a single query and stream results via writeOutput.
- * Uses MessageStream (AsyncIterable) to keep isSingleUserTurn=false,
- * allowing agent teams subagents to run to completion.
- * Also pipes IPC messages into the stream during the query.
+ * Run a single turn and stream SDK events for logs + final output.
  */
 async function runQuery(
   prompt: string,
@@ -345,46 +319,24 @@ async function runQuery(
   mcpServerPath: string,
   containerInput: ContainerInput,
   sdkEnv: Record<string, string | undefined>,
-  resumeAt?: string,
-): Promise<{ newSessionId?: string; lastAssistantUuid?: string; closedDuringQuery: boolean }> {
-  const stream = new MessageStream();
-  stream.push(prompt);
+): Promise<{ newSessionId?: string; closedDuringQuery: boolean }> {
+  const codex = new Codex({
+    env: sanitizeEnv(sdkEnv),
+    config: {
+      mcp_servers: {
+        nanoclaw: {
+          command: 'node',
+          args: [mcpServerPath],
+          env: {
+            NANOCLAW_CHAT_JID: containerInput.chatJid,
+            NANOCLAW_GROUP_FOLDER: containerInput.groupFolder,
+            NANOCLAW_IS_MAIN: containerInput.isMain ? '1' : '0',
+          },
+        },
+      },
+    },
+  });
 
-  // Poll IPC for follow-up messages and _close sentinel during the query
-  let ipcPolling = true;
-  let closedDuringQuery = false;
-  const pollIpcDuringQuery = () => {
-    if (!ipcPolling) return;
-    if (shouldClose()) {
-      log('Close sentinel detected during query, ending stream');
-      closedDuringQuery = true;
-      stream.end();
-      ipcPolling = false;
-      return;
-    }
-    const messages = drainIpcInput();
-    for (const text of messages) {
-      log(`Piping IPC message into active query (${text.length} chars)`);
-      stream.push(text);
-    }
-    setTimeout(pollIpcDuringQuery, IPC_POLL_MS);
-  };
-  setTimeout(pollIpcDuringQuery, IPC_POLL_MS);
-
-  let newSessionId: string | undefined;
-  let lastAssistantUuid: string | undefined;
-  let messageCount = 0;
-  let resultCount = 0;
-
-  // Load global AGENTS.md as additional system context (shared across all groups)
-  const globalAgentsMdPath = '/workspace/global/AGENTS.md';
-  let globalAgentsMd: string | undefined;
-  if (!containerInput.isMain && fs.existsSync(globalAgentsMdPath)) {
-    globalAgentsMd = fs.readFileSync(globalAgentsMdPath, 'utf-8');
-  }
-
-  // Discover additional directories mounted at /workspace/extra/*
-  // These are passed to the SDK so their AGENTS.md files are loaded automatically
   const extraDirs: string[] = [];
   const extraBase = '/workspace/extra';
   if (fs.existsSync(extraBase)) {
@@ -399,79 +351,77 @@ async function runQuery(
     log(`Additional directories: ${extraDirs.join(', ')}`);
   }
 
-  for await (const message of query({
-    prompt: stream,
-    options: {
-      cwd: '/workspace/group',
-      additionalDirectories: extraDirs.length > 0 ? extraDirs : undefined,
-      resume: sessionId,
-      resumeSessionAt: resumeAt,
-      systemPrompt: globalAgentsMd
-        ? { type: 'preset' as const, preset: 'codex' as const, append: globalAgentsMd }
-        : undefined,
-      allowedTools: [
-        'Bash',
-        'Read', 'Write', 'Edit', 'Glob', 'Grep',
-        'WebSearch', 'WebFetch',
-        'Task', 'TaskOutput', 'TaskStop',
-        'TeamCreate', 'TeamDelete', 'SendMessage',
-        'TodoWrite', 'ToolSearch', 'Skill',
-        'NotebookEdit',
-        'mcp__nanoclaw__*'
-      ],
-      env: sdkEnv,
-      permissionMode: 'bypassPermissions',
-      allowDangerouslySkipPermissions: true,
-      settingSources: ['project', 'user'],
-      mcpServers: {
-        nanoclaw: {
-          command: 'node',
-          args: [mcpServerPath],
-          env: {
-            NANOCLAW_CHAT_JID: containerInput.chatJid,
-            NANOCLAW_GROUP_FOLDER: containerInput.groupFolder,
-            NANOCLAW_IS_MAIN: containerInput.isMain ? '1' : '0',
-          },
-        },
-      },
-      hooks: {
-        PreCompact: [{ hooks: [createPreCompactHook()] }],
-      },
-    }
-  })) {
-    messageCount++;
-    const msgType = message.type === 'system' ? `system/${(message as { subtype?: string }).subtype}` : message.type;
-    log(`[msg #${messageCount}] type=${msgType}`);
-
-    if (message.type === 'assistant' && 'uuid' in message) {
-      lastAssistantUuid = (message as { uuid: string }).uuid;
-    }
-
-    if (message.type === 'system' && message.subtype === 'init') {
-      newSessionId = message.session_id;
-      log(`Session initialized: ${newSessionId}`);
-    }
-
-    if (message.type === 'system' && (message as { subtype?: string }).subtype === 'task_notification') {
-      const tn = message as { task_id: string; status: string; summary: string };
-      log(`Task notification: task=${tn.task_id} status=${tn.status} summary=${tn.summary}`);
-    }
-
-    if (message.type === 'result') {
-      resultCount++;
-      const textResult = 'result' in message ? (message as { result?: string }).result : null;
-      log(`Result #${resultCount}: subtype=${message.subtype}${textResult ? ` text=${textResult.slice(0, 200)}` : ''}`);
-      writeOutput({
-        status: 'success',
-        result: textResult || null,
-        newSessionId
-      });
-    }
+  let finalPrompt = prompt;
+  const globalAgentsMdPath = '/workspace/global/AGENTS.md';
+  if (!containerInput.isMain && fs.existsSync(globalAgentsMdPath)) {
+    const globalAgentsMd = fs.readFileSync(globalAgentsMdPath, 'utf-8');
+    finalPrompt = [
+      'Additional global instructions:',
+      globalAgentsMd,
+      '',
+      'User request:',
+      prompt,
+    ].join('\n');
   }
 
-  ipcPolling = false;
-  log(`Query done. Messages: ${messageCount}, results: ${resultCount}, lastAssistantUuid: ${lastAssistantUuid || 'none'}, closedDuringQuery: ${closedDuringQuery}`);
-  return { newSessionId, lastAssistantUuid, closedDuringQuery };
+  const threadOptions = {
+    workingDirectory: '/workspace/group',
+    additionalDirectories: extraDirs.length > 0 ? extraDirs : undefined,
+    sandboxMode: 'workspace-write' as const,
+    networkAccessEnabled: true,
+    approvalPolicy: 'never' as const,
+    skipGitRepoCheck: true,
+  };
+  const thread: Thread = sessionId
+    ? codex.resumeThread(sessionId, threadOptions)
+    : codex.startThread(threadOptions);
+
+  const abortController = new AbortController();
+  let closedDuringQuery = false;
+  const closeWatcher = setInterval(() => {
+    if (fs.existsSync(IPC_INPUT_CLOSE_SENTINEL)) {
+      try { fs.unlinkSync(IPC_INPUT_CLOSE_SENTINEL); } catch { /* ignore */ }
+      log('Close sentinel detected during turn; aborting turn');
+      closedDuringQuery = true;
+      abortController.abort();
+    }
+  }, IPC_POLL_MS);
+
+  let newSessionId: string | undefined;
+  let messageCount = 0;
+  let lastAssistantText: string | null = null;
+
+  try {
+    const { events } = await thread.runStreamed(finalPrompt, { signal: abortController.signal });
+    for await (const event of events) {
+      messageCount++;
+      if (event.type === 'thread.started') {
+        newSessionId = event.thread_id;
+        log(`Session initialized: ${newSessionId}`);
+      }
+
+      const assistantText = getLastAssistantText(event);
+      if (assistantText) {
+        lastAssistantText = assistantText;
+      }
+
+      if (event.type === 'turn.failed') {
+        throw new Error(event.error.message);
+      }
+    }
+  } finally {
+    clearInterval(closeWatcher);
+  }
+
+  const resolvedSessionId = thread.id || newSessionId || sessionId;
+  writeOutput({
+    status: 'success',
+    result: lastAssistantText,
+    newSessionId: resolvedSessionId
+  });
+
+  log(`Turn done. Events: ${messageCount}, closedDuringQuery: ${closedDuringQuery}`);
+  return { newSessionId: resolvedSessionId, closedDuringQuery };
 }
 
 async function main(): Promise<void> {
@@ -519,18 +469,14 @@ async function main(): Promise<void> {
     prompt += '\n' + pending.join('\n');
   }
 
-  // Query loop: run query → wait for IPC message → run new query → repeat
-  let resumeAt: string | undefined;
+  // Query loop: run a turn, then wait for IPC input for the next turn.
   try {
     while (true) {
-      log(`Starting query (session: ${sessionId || 'new'}, resumeAt: ${resumeAt || 'latest'})...`);
+      log(`Starting turn (session: ${sessionId || 'new'})...`);
 
-      const queryResult = await runQuery(prompt, sessionId, mcpServerPath, containerInput, sdkEnv, resumeAt);
+      const queryResult = await runQuery(prompt, sessionId, mcpServerPath, containerInput, sdkEnv);
       if (queryResult.newSessionId) {
         sessionId = queryResult.newSessionId;
-      }
-      if (queryResult.lastAssistantUuid) {
-        resumeAt = queryResult.lastAssistantUuid;
       }
 
       // If _close was consumed during the query, exit immediately.
@@ -544,7 +490,7 @@ async function main(): Promise<void> {
       // Emit session update so host can track it
       writeOutput({ status: 'success', result: null, newSessionId: sessionId });
 
-      log('Query ended, waiting for next IPC message...');
+      log('Turn ended, waiting for next IPC message...');
 
       // Wait for the next message or _close sentinel
       const nextMessage = await waitForIpcMessage();

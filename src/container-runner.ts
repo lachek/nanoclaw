@@ -58,6 +58,25 @@ interface VolumeMount {
   readonly: boolean;
 }
 
+/**
+ * Mirror host Codex OAuth credentials into the isolated per-group .codex dir.
+ * Keeps session/history isolated while allowing auth without API keys.
+ */
+function syncHostCodexAuth(groupCodexDir: string, homeDir: string): void {
+  const hostCodexDir = path.join(homeDir, '.codex');
+  const filesToSync = ['auth.json', 'config.toml'];
+
+  for (const filename of filesToSync) {
+    const src = path.join(hostCodexDir, filename);
+    const dst = path.join(groupCodexDir, filename);
+    if (!fs.existsSync(src)) continue;
+
+    fs.copyFileSync(src, dst);
+    // Preserve secret file privacy inside mounted session dirs.
+    fs.chmodSync(dst, 0o600);
+  }
+}
+
 function buildVolumeMounts(
   group: RegisteredGroup,
   isMain: boolean,
@@ -134,6 +153,11 @@ function buildVolumeMounts(
       fs.cpSync(srcDir, dstDir, { recursive: true });
     }
   }
+
+  // If host Codex CLI is authenticated via OAuth, copy auth into group profile.
+  // This allows container agents to authenticate without API keys in .env.
+  syncHostCodexAuth(groupSessionsDir, homeDir);
+
   mounts.push({
     hostPath: groupSessionsDir,
     containerPath: '/home/node/.codex',
