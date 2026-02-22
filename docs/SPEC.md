@@ -24,7 +24,7 @@ A personal Claude assistant accessible via WhatsApp, with persistent memory per 
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
-│                        HOST (macOS)                                  │
+│                   HOST (macOS/Linux/WSL2)                            │
 │                   (Main Node.js Process)                             │
 ├─────────────────────────────────────────────────────────────────────┤
 │                                                                      │
@@ -130,6 +130,7 @@ nanoclaw/
 ├── .claude/
 │   └── skills/
 │       ├── setup/SKILL.md              # /setup - First-time installation
+│       ├── setup-windows/SKILL.md      # /setup-windows - WSL2 + Docker Desktop setup
 │       ├── customize/SKILL.md          # /customize - Add capabilities
 │       ├── debug/SKILL.md              # /debug - Container debugging
 │       ├── add-telegram/SKILL.md       # /add-telegram - Telegram channel
@@ -479,7 +480,11 @@ The `nanoclaw` MCP server is created dynamically per agent call with the current
 
 ## Deployment
 
-NanoClaw runs as a single macOS launchd service.
+NanoClaw runs as a single local Node.js process managed by the host service manager.
+
+- macOS: launchd
+- Linux: user systemd
+- Windows (WSL2): user systemd when available, otherwise manual run mode
 
 ### Startup Sequence
 
@@ -535,17 +540,26 @@ When NanoClaw starts, it:
 ### Managing the Service
 
 ```bash
-# Install service
+# macOS: install service
 cp launchd/com.nanoclaw.plist ~/Library/LaunchAgents/
 
-# Start service
+# macOS: start service
 launchctl load ~/Library/LaunchAgents/com.nanoclaw.plist
 
-# Stop service
+# macOS: stop service
 launchctl unload ~/Library/LaunchAgents/com.nanoclaw.plist
 
-# Check status
+# macOS: check status
 launchctl list | grep nanoclaw
+
+# Linux / WSL with systemd: check status
+systemctl --user status nanoclaw
+
+# Linux / WSL with systemd: restart
+systemctl --user restart nanoclaw
+
+# WSL manual mode: run in foreground
+npm run build && node dist/index.js
 
 # View logs
 tail -f logs/nanoclaw.log
@@ -604,7 +618,7 @@ chmod 700 groups/
 
 | Issue | Cause | Solution |
 |-------|-------|----------|
-| No response to messages | Service not running | Check `launchctl list | grep nanoclaw` |
+| No response to messages | Service not running | Check service status (`launchctl list | grep nanoclaw` on macOS, `systemctl --user status nanoclaw` on Linux/WSL with systemd, or ensure manual process is running on WSL) |
 | "Claude Code process exited with code 1" | Container runtime failed to start | Check logs; NanoClaw auto-starts container runtime but may fail |
 | "Claude Code process exited with code 1" | Session mount path wrong | Ensure mount is to `/home/node/.claude/` not `/root/.claude/` |
 | Session not continuing | Session ID not saved | Check SQLite: `sqlite3 store/messages.db "SELECT * FROM sessions"` |

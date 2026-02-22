@@ -11,6 +11,14 @@ mkdir -p "$PROJECT_ROOT/logs"
 
 log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] [setup-service] $*" >> "$LOG_FILE"; }
 
+is_wsl() {
+  [ -n "${WSL_INTEROP:-}" ] || [ -n "${WSL_DISTRO_NAME:-}" ] || grep -qi microsoft /proc/version 2>/dev/null
+}
+
+has_user_systemd() {
+  command -v systemctl >/dev/null 2>&1 && systemctl --user show-environment >/dev/null 2>&1
+}
+
 cd "$PROJECT_ROOT"
 
 # Parse args
@@ -26,7 +34,13 @@ done
 if [ -z "$PLATFORM" ]; then
   case "$(uname -s)" in
     Darwin*) PLATFORM="macos" ;;
-    Linux*)  PLATFORM="linux" ;;
+    Linux*)
+      if is_wsl; then
+        PLATFORM="wsl"
+      else
+        PLATFORM="linux"
+      fi
+      ;;
     *)       PLATFORM="unknown" ;;
   esac
 fi
@@ -128,6 +142,21 @@ EOF
     ;;
 
   linux)
+    if ! has_user_systemd; then
+      log "systemd user instance unavailable on Linux"
+      cat <<EOF
+=== NANOCLAW SETUP: SETUP_SERVICE ===
+SERVICE_TYPE: unknown
+NODE_PATH: $NODE_PATH
+PROJECT_PATH: $PROJECT_PATH
+STATUS: failed
+ERROR: systemd_unavailable
+LOG: logs/setup.log
+=== END ===
+EOF
+      exit 1
+    fi
+
     UNIT_DIR="$HOME_PATH/.config/systemd/user"
     UNIT_PATH="$UNIT_DIR/nanoclaw.service"
     mkdir -p "$UNIT_DIR"
@@ -178,6 +207,74 @@ STATUS: success
 LOG: logs/setup.log
 === END ===
 EOF
+    ;;
+
+  wsl)
+    if has_user_systemd; then
+      UNIT_DIR="$HOME_PATH/.config/systemd/user"
+      UNIT_PATH="$UNIT_DIR/nanoclaw.service"
+      mkdir -p "$UNIT_DIR"
+      log "WSL detected with systemd available; generating unit at $UNIT_PATH"
+
+      cat > "$UNIT_PATH" <<UNITEOF
+[Unit]
+Description=NanoClaw Personal Assistant
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=${NODE_PATH} ${PROJECT_PATH}/dist/index.js
+WorkingDirectory=${PROJECT_PATH}
+Restart=always
+RestartSec=5
+Environment=HOME=${HOME_PATH}
+Environment=PATH=/usr/local/bin:/usr/bin:/bin:${HOME_PATH}/.local/bin
+StandardOutput=append:${PROJECT_PATH}/logs/nanoclaw.log
+StandardError=append:${PROJECT_PATH}/logs/nanoclaw.error.log
+
+[Install]
+WantedBy=default.target
+UNITEOF
+
+      log "Enabling and starting systemd service in WSL"
+      systemctl --user daemon-reload >> "$LOG_FILE" 2>&1 || true
+      systemctl --user enable nanoclaw >> "$LOG_FILE" 2>&1 || true
+      systemctl --user start nanoclaw >> "$LOG_FILE" 2>&1 || true
+
+      SERVICE_LOADED="false"
+      if systemctl --user is-active nanoclaw >/dev/null 2>&1; then
+        SERVICE_LOADED="true"
+        log "Service verified as active"
+      else
+        log "Service not active"
+      fi
+
+      cat <<EOF
+=== NANOCLAW SETUP: SETUP_SERVICE ===
+SERVICE_TYPE: systemd
+NODE_PATH: $NODE_PATH
+PROJECT_PATH: $PROJECT_PATH
+UNIT_PATH: $UNIT_PATH
+SERVICE_LOADED: $SERVICE_LOADED
+STATUS: success
+LOG: logs/setup.log
+=== END ===
+EOF
+    else
+      log "WSL detected without systemd; using manual run mode"
+      MANUAL_COMMAND="npm run build && node dist/index.js"
+      cat <<EOF
+=== NANOCLAW SETUP: SETUP_SERVICE ===
+SERVICE_TYPE: manual
+NODE_PATH: $NODE_PATH
+PROJECT_PATH: $PROJECT_PATH
+SERVICE_LOADED: manual
+MANUAL_COMMAND: $MANUAL_COMMAND
+STATUS: success
+LOG: logs/setup.log
+=== END ===
+EOF
+    fi
     ;;
 
   *)

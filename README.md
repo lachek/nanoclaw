@@ -29,7 +29,7 @@ cd nanoclaw
 claude
 ```
 
-Then run `/setup`. Claude Code handles everything: dependencies, authentication, container setup, service configuration.
+Then run `/setup` (or `/setup-windows` if you're on Windows via WSL2). Claude Code handles everything: dependencies, authentication, container setup, service configuration.
 
 ## Philosophy
 
@@ -54,7 +54,7 @@ Then run `/setup`. Claude Code handles everything: dependencies, authentication,
 - **Main channel** - Your private channel (self-chat) for admin control; every other group is completely isolated
 - **Scheduled tasks** - Recurring jobs that run Claude and can message you back
 - **Web access** - Search and fetch content
-- **Container isolation** - Agents sandboxed in Apple Container (macOS) or Docker (macOS/Linux)
+- **Container isolation** - Agents sandboxed in Apple Container (macOS) or Docker (macOS/Linux/WSL2 on Windows)
 - **Agent Swarms** - Spin up teams of specialized agents that collaborate on complex tasks (first personal AI assistant to support this)
 - **Optional integrations** - Add Gmail (`/add-gmail`) and more via skills
 
@@ -105,18 +105,15 @@ Skills we'd love to see:
 - `/add-slack` - Add Slack
 - `/add-discord` - Add Discord
 
-**Platform Support**
-- `/setup-windows` - Windows via WSL2 + Docker
-
 **Session Management**
 - `/add-clear` - Add a `/clear` command that compacts the conversation (summarizes context while preserving critical information in the same session). Requires figuring out how to trigger compaction programmatically via the Claude Agent SDK.
 
 ## Requirements
 
-- macOS or Linux
+- macOS, Linux, or Windows (via WSL2)
 - Node.js 20+
 - [Claude Code](https://claude.ai/download)
-- [Apple Container](https://github.com/apple/container) (macOS) or [Docker](https://docker.com/products/docker-desktop) (macOS/Linux)
+- [Apple Container](https://github.com/apple/container) (macOS) or [Docker](https://docker.com/products/docker-desktop) (macOS/Linux/Windows via WSL2 integration)
 
 ## Architecture
 
@@ -145,11 +142,15 @@ Because I use WhatsApp. Fork it and run a skill to change it. That's the whole p
 
 **Why Docker?**
 
-Docker provides cross-platform support (macOS and Linux) and a mature ecosystem. On macOS, you can optionally switch to Apple Container via `/convert-to-apple-container` for a lighter-weight native runtime.
+Docker provides cross-platform support (macOS, Linux, and Windows via WSL2) and a mature ecosystem. On macOS, you can optionally switch to Apple Container via `/convert-to-apple-container` for a lighter-weight native runtime.
 
 **Can I run this on Linux?**
 
 Yes. Docker is the default runtime and works on both macOS and Linux. Just run `/setup`.
+
+**Can I run this on Windows?**
+
+Yes, through WSL2 + Docker Desktop. Run NanoClaw inside your WSL distro and run `/setup-windows`.
 
 **Is this secure?**
 

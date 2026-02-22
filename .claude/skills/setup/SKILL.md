@@ -15,6 +15,8 @@ Run setup scripts automatically. Only pause when user action is required (WhatsA
 
 Run `./.claude/skills/setup/scripts/01-check-environment.sh` and parse the status block.
 
+If `PLATFORM=wsl`, recommend using `/setup-windows` for the dedicated Windows path. If the user prefers to continue in `/setup`, proceed with the WSL handling in this guide.
+
 - If HAS_AUTH=true → note that WhatsApp auth exists, offer to skip step 5
 - If HAS_REGISTERED_GROUPS=true → note existing config, offer to skip or reconfigure
 - Record PLATFORM, APPLE_CONTAINER, and DOCKER values for step 3
@@ -24,7 +26,9 @@ Run `./.claude/skills/setup/scripts/01-check-environment.sh` and parse the statu
 Node.js is missing or too old. Ask the user if they'd like you to install it. Offer options based on platform:
 
 - macOS: `brew install node@22` (if brew available) or install nvm then `nvm install 22`
-- Linux: `curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash - && sudo apt-get install -y nodejs`, or nvm
+- Linux/WSL: `curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash - && sudo apt-get install -y nodejs`, or nvm
+
+If `PLATFORM=wsl`, remind the user this setup must run inside the WSL terminal (not PowerShell/cmd).
 
 If brew/nvm aren't installed, install them first (`/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"` for brew, `curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.1/install.sh | bash` for nvm). After installing Node, re-run the environment check to confirm NODE_OK=true.
 
@@ -52,10 +56,15 @@ Check the preflight results for `APPLE_CONTAINER` and `DOCKER`.
 ### 3a-docker. Install Docker
 
 - DOCKER=running → continue to 3b
-- DOCKER=installed_not_running → start Docker: `open -a Docker` (macOS) or `sudo systemctl start docker` (Linux). Wait 15s, re-check with `docker info`. If still not running, tell the user Docker is starting up and poll a few more times.
+- DOCKER=installed_not_running →
+  - macOS: start Docker with `open -a Docker`
+  - Linux: `sudo systemctl start docker`
+  - WSL: start Docker Desktop on Windows, wait 15s, then re-check with `docker info`
+  If still not running, tell the user Docker is starting up and poll a few more times.
 - DOCKER=not_found → **ask the user for confirmation before installing.** Tell them Docker is required for running agents and ask if they'd like you to install it. If confirmed:
   - macOS: install via `brew install --cask docker`, then `open -a Docker` and wait for it to start. If brew not available, direct to Docker Desktop download at https://docker.com/products/docker-desktop
   - Linux: install with `curl -fsSL https://get.docker.com | sh && sudo usermod -aG docker $USER`. Note: user may need to log out/in for group membership.
+  - WSL: install Docker Desktop on Windows (https://docker.com/products/docker-desktop), enable **WSL integration** for the current distro in Docker Desktop settings, then re-check `docker info` from WSL.
 
 ### 3b. Apple Container conversion gate (if needed)
 
@@ -178,11 +187,15 @@ If the service is already running (check `launchctl list | grep nanoclaw` on mac
 
 Run `./.claude/skills/setup/scripts/08-setup-service.sh` and parse the status block.
 
+If `SERVICE_TYPE=manual` (WSL without systemd): treat as successful setup for this step. Show the command to run NanoClaw manually:
+`npm run build && node dist/index.js`
+Tell the user to keep that terminal open, and use `tail -f logs/nanoclaw.log` in another terminal for logs.
+
 **If SERVICE_LOADED=false:**
 - Read `logs/setup.log` for the error.
 - Common fix: plist already loaded with different path. Unload the old one first, then re-run.
 - On macOS: check `launchctl list | grep nanoclaw` to see if it's loaded with an error status. If the PID column is `-` and the status column is non-zero, the service is crashing. Read `logs/nanoclaw.error.log` for the crash reason and fix it (common: wrong Node path, missing .env, missing auth).
-- On Linux: check `systemctl --user status nanoclaw` for the error and fix accordingly.
+- On Linux/WSL with systemd: check `systemctl --user status nanoclaw` for the error and fix accordingly.
 - Re-run the setup-service script after fixing.
 
 ## 11. Verify
@@ -190,7 +203,8 @@ Run `./.claude/skills/setup/scripts/08-setup-service.sh` and parse the status bl
 Run `./.claude/skills/setup/scripts/09-verify.sh` and parse the status block.
 
 **If STATUS=failed, fix each failing component:**
-- SERVICE=stopped → run `npm run build` first, then restart: `launchctl kickstart -k gui/$(id -u)/com.nanoclaw` (macOS) or `systemctl --user restart nanoclaw` (Linux). Re-check.
+- SERVICE=stopped → run `npm run build` first, then restart: `launchctl kickstart -k gui/$(id -u)/com.nanoclaw` (macOS) or `systemctl --user restart nanoclaw` (Linux/WSL with systemd). Re-check.
+- SERVICE=manual → this is valid for WSL without systemd; ensure user has started `npm run build && node dist/index.js` in a persistent terminal.
 - SERVICE=not_found → re-run step 10.
 - CREDENTIALS=missing → re-run step 4.
 - WHATSAPP_AUTH=not_found → re-run step 5.
@@ -213,6 +227,9 @@ Show the log tail command: `tail -f logs/nanoclaw.log`
 
 **Messages sent but not received (DMs):** WhatsApp may use LID (Linked Identity) JIDs. Check logs for LID translation. Verify the registered JID has no device suffix (should be `number@s.whatsapp.net`, not `number:0@s.whatsapp.net`).
 
-**WhatsApp disconnected:** Run `npm run auth` to re-authenticate, then `npm run build && launchctl kickstart -k gui/$(id -u)/com.nanoclaw`.
+**WhatsApp disconnected:** Run `npm run auth` to re-authenticate, then restart service:
+- macOS: `npm run build && launchctl kickstart -k gui/$(id -u)/com.nanoclaw`
+- Linux/WSL with systemd: `npm run build && systemctl --user restart nanoclaw`
+- WSL manual mode: `npm run build && node dist/index.js`
 
 **Unload service:** `launchctl unload ~/Library/LaunchAgents/com.nanoclaw.plist`

@@ -29,7 +29,7 @@ cd nanoclaw
 claude
 ```
 
-然后运行 `/setup`。Claude Code 会处理一切：依赖安装、身份验证、容器设置、服务配置。
+然后运行 `/setup`（如果您在 Windows + WSL2 上运行，请使用 `/setup-windows`）。Claude Code 会处理一切：依赖安装、身份验证、容器设置、服务配置。
 
 ## 设计哲学
 
@@ -54,7 +54,7 @@ claude
 - **主频道** - 您的私有频道（self-chat），用于管理控制；其他所有群组都完全隔离
 - **计划任务** - 运行 Claude 的周期性作业，并可以给您回发消息
 - **网络访问** - 搜索和抓取网页内容
-- **容器隔离** - 智能体在 Apple Container (macOS) 或 Docker (macOS/Linux) 的沙箱中运行
+- **容器隔离** - 智能体在 Apple Container (macOS) 或 Docker (macOS/Linux/Windows 通过 WSL2) 的沙箱中运行
 - **智能体集群（Agent Swarms）** - 启动多个专业智能体团队，协作完成复杂任务（首个支持此功能的个人 AI 助手）
 - **可选集成** - 通过技能添加 Gmail (`/add-gmail`) 等更多功能
 
@@ -105,18 +105,15 @@ claude
 - `/add-slack` - 添加 Slack
 - `/add-discord` - 添加 Discord
 
-**平台支持**
-- `/setup-windows` - 通过 WSL2 + Docker 支持 Windows
-
 **会话管理**
 - `/add-clear` - 添加一个 `/clear` 命令，用于压缩会话（在同一会话中总结上下文，同时保留关键信息）。这需要研究如何通过 Claude Agent SDK 以编程方式触发压缩。
 
 ## 系统要求
 
-- macOS 或 Linux
+- macOS、Linux 或 Windows（通过 WSL2）
 - Node.js 20+
 - [Claude Code](https://claude.ai/download)
-- [Apple Container](https://github.com/apple/container) (macOS) 或 [Docker](https://docker.com/products/docker-desktop) (macOS/Linux)
+- [Apple Container](https://github.com/apple/container) (macOS) 或 [Docker](https://docker.com/products/docker-desktop) (macOS/Linux/Windows 通过 WSL2 集成)
 
 ## 架构
 
@@ -145,11 +142,15 @@ WhatsApp (baileys) --> SQLite --> 轮询循环 --> 容器 (Claude Agent SDK) -->
 
 **为什么是 Docker？**
 
-Docker 提供跨平台支持（macOS 和 Linux）和成熟的生态系统。在 macOS 上，您可以选择通过运行 `/convert-to-apple-container` 切换到 Apple Container，以获得更轻量级的原生运行时体验。
+Docker 提供跨平台支持（macOS、Linux，以及通过 WSL2 的 Windows）和成熟的生态系统。在 macOS 上，您可以选择通过运行 `/convert-to-apple-container` 切换到 Apple Container，以获得更轻量级的原生运行时体验。
 
 **我可以在 Linux 上运行吗？**
 
 可以。Docker 是默认的容器运行时，在 macOS 和 Linux 上都可以使用。只需运行 `/setup`。
+
+**我可以在 Windows 上运行吗？**
+
+可以，通过 WSL2 + Docker Desktop。请在 WSL 发行版里运行 NanoClaw，然后执行 `/setup-windows`。
 
 **这个项目安全吗？**
 

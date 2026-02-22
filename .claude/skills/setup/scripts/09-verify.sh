@@ -11,6 +11,14 @@ mkdir -p "$PROJECT_ROOT/logs"
 
 log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] [verify] $*" >> "$LOG_FILE"; }
 
+is_wsl() {
+  [ -n "${WSL_INTEROP:-}" ] || [ -n "${WSL_DISTRO_NAME:-}" ] || grep -qi microsoft /proc/version 2>/dev/null
+}
+
+has_user_systemd() {
+  command -v systemctl >/dev/null 2>&1 && systemctl --user show-environment >/dev/null 2>&1
+}
+
 cd "$PROJECT_ROOT"
 
 log "Starting verification"
@@ -18,7 +26,13 @@ log "Starting verification"
 # Detect platform
 case "$(uname -s)" in
   Darwin*) PLATFORM="macos" ;;
-  Linux*)  PLATFORM="linux" ;;
+  Linux*)
+    if is_wsl; then
+      PLATFORM="wsl"
+    else
+      PLATFORM="linux"
+    fi
+    ;;
   *)       PLATFORM="unknown" ;;
 esac
 
@@ -36,10 +50,20 @@ if [ "$PLATFORM" = "macos" ]; then
     fi
   fi
 elif [ "$PLATFORM" = "linux" ]; then
-  if systemctl --user is-active nanoclaw >/dev/null 2>&1; then
+  if has_user_systemd && systemctl --user is-active nanoclaw >/dev/null 2>&1; then
     SERVICE="running"
-  elif systemctl --user list-unit-files 2>/dev/null | grep -q "nanoclaw"; then
+  elif has_user_systemd && systemctl --user list-unit-files 2>/dev/null | grep -q "nanoclaw"; then
     SERVICE="stopped"
+  fi
+elif [ "$PLATFORM" = "wsl" ]; then
+  if has_user_systemd; then
+    if systemctl --user is-active nanoclaw >/dev/null 2>&1; then
+      SERVICE="running"
+    elif systemctl --user list-unit-files 2>/dev/null | grep -q "nanoclaw"; then
+      SERVICE="stopped"
+    fi
+  else
+    SERVICE="manual"
   fi
 fi
 log "Service: $SERVICE"
@@ -85,7 +109,12 @@ log "Mount allowlist: $MOUNT_ALLOWLIST"
 
 # Determine overall status
 STATUS="success"
-if [ "$SERVICE" != "running" ] || [ "$CREDENTIALS" = "missing" ] || [ "$WHATSAPP_AUTH" = "not_found" ] || [ "$REGISTERED_GROUPS" -eq 0 ] 2>/dev/null; then
+SERVICE_OK="false"
+if [ "$SERVICE" = "running" ] || [ "$SERVICE" = "manual" ]; then
+  SERVICE_OK="true"
+fi
+
+if [ "$SERVICE_OK" != "true" ] || [ "$CREDENTIALS" = "missing" ] || [ "$WHATSAPP_AUTH" = "not_found" ] || [ "$REGISTERED_GROUPS" -eq 0 ] 2>/dev/null; then
   STATUS="failed"
 fi
 

@@ -13,11 +13,21 @@ log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] [check-environment] $*" >> "$LOG_FI
 
 log "Starting environment check"
 
+is_wsl() {
+  [ -n "${WSL_INTEROP:-}" ] || [ -n "${WSL_DISTRO_NAME:-}" ] || grep -qi microsoft /proc/version 2>/dev/null
+}
+
 # Detect platform
 UNAME=$(uname -s)
 case "$UNAME" in
   Darwin*) PLATFORM="macos" ;;
-  Linux*)  PLATFORM="linux" ;;
+  Linux*)
+    if is_wsl; then
+      PLATFORM="wsl"
+    else
+      PLATFORM="linux"
+    fi
+    ;;
   *)       PLATFORM="unknown" ;;
 esac
 log "Platform: $PLATFORM ($UNAME)"
@@ -90,6 +100,7 @@ log "Environment check complete"
 cat <<EOF
 === NANOCLAW SETUP: CHECK_ENVIRONMENT ===
 PLATFORM: $PLATFORM
+WSL: $( [ "$PLATFORM" = "wsl" ] && echo "true" || echo "false" )
 NODE_VERSION: $NODE_VERSION
 NODE_OK: $NODE_OK
 APPLE_CONTAINER: $APPLE_CONTAINER

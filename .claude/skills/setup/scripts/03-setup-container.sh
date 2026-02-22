@@ -11,6 +11,10 @@ mkdir -p "$PROJECT_ROOT/logs"
 
 log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] [setup-container] $*" >> "$LOG_FILE"; }
 
+is_wsl() {
+  [ -n "${WSL_INTEROP:-}" ] || [ -n "${WSL_DISTRO_NAME:-}" ] || grep -qi microsoft /proc/version 2>/dev/null
+}
+
 # Parse args
 RUNTIME=""
 while [[ $# -gt 0 ]]; do
@@ -37,6 +41,7 @@ EOF
 fi
 
 IMAGE="nanoclaw-agent:latest"
+RUNTIME_HINT=""
 
 # Determine build/run commands based on runtime
 case "$RUNTIME" in
@@ -62,6 +67,10 @@ EOF
   docker)
     if ! command -v docker >/dev/null 2>&1 || ! docker info >/dev/null 2>&1; then
       log "Docker runtime not available or not running"
+      if is_wsl; then
+        RUNTIME_HINT="Start Docker Desktop on Windows and enable WSL integration for this distro"
+        log "Hint: $RUNTIME_HINT"
+      fi
       cat <<EOF
 === NANOCLAW SETUP: SETUP_CONTAINER ===
 RUNTIME: docker
@@ -70,6 +79,7 @@ BUILD_OK: false
 TEST_OK: false
 STATUS: failed
 ERROR: runtime_not_available
+${RUNTIME_HINT:+HINT: $RUNTIME_HINT}
 LOG: logs/setup.log
 === END ===
 EOF

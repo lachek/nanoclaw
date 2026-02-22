@@ -59,8 +59,7 @@ The project uses Docker by default (cross-platform). For macOS users who prefer 
 - `/convert-to-apple-container` - Switch from Docker to Apple Container (macOS-only)
 
 ### Platform Support
-- `/setup-linux` - Make the full setup work on Linux (depends on Docker conversion)
-- `/setup-windows` - Windows support via WSL2 + Docker
+- `/setup-linux` - Improve Linux setup ergonomics
 
 ---
 
@@ -171,10 +170,11 @@ A personal Claude assistant accessible via WhatsApp, with minimal custom code.
 
 ### Skills
 - `/setup` - Install dependencies, authenticate WhatsApp, configure scheduler, start services
+- `/setup-windows` - WSL2 + Docker Desktop setup on Windows hosts
 - `/customize` - General-purpose skill for adding capabilities (new channels like Telegram, new integrations, behavior changes)
 
 ### Deployment
-- Runs on local Mac via launchd
+- Runs locally on macOS (launchd), Linux (user systemd), and Windows via WSL2 (user systemd or manual run)
 - Single Node.js process handles everything
 
 ---

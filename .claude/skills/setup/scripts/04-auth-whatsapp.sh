@@ -11,6 +11,37 @@ mkdir -p "$PROJECT_ROOT/logs"
 
 log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] [auth-whatsapp] $*" >> "$LOG_FILE"; }
 
+is_wsl() {
+  [ -n "${WSL_INTEROP:-}" ] || [ -n "${WSL_DISTRO_NAME:-}" ] || grep -qi microsoft /proc/version 2>/dev/null
+}
+
+open_in_browser() {
+  local target_path="$1"
+
+  if command -v open >/dev/null 2>&1; then
+    open "$target_path" >/dev/null 2>&1 && return 0
+  fi
+
+  if command -v xdg-open >/dev/null 2>&1; then
+    xdg-open "$target_path" >/dev/null 2>&1 && return 0
+  fi
+
+  if is_wsl; then
+    local win_path=""
+    if command -v wslpath >/dev/null 2>&1; then
+      win_path=$(wslpath -w "$target_path" 2>/dev/null || echo "")
+    fi
+    if [ -n "$win_path" ] && command -v powershell.exe >/dev/null 2>&1; then
+      powershell.exe -NoProfile -Command "Start-Process '$win_path'" >/dev/null 2>&1 && return 0
+    fi
+    if [ -n "$win_path" ] && command -v cmd.exe >/dev/null 2>&1; then
+      cmd.exe /c start "" "$win_path" >/dev/null 2>&1 && return 0
+    fi
+  fi
+
+  return 1
+}
+
 cd "$PROJECT_ROOT"
 
 # Parse args
@@ -162,12 +193,11 @@ case "$METHOD" in
       });
     " >> "$LOG_FILE" 2>&1
 
-    # Open in browser (macOS)
-    if command -v open >/dev/null 2>&1; then
-      open "$PROJECT_ROOT/store/qr-auth.html"
+    # Open in browser (macOS/Linux/WSL)
+    if open_in_browser "$PROJECT_ROOT/store/qr-auth.html"; then
       log "Opened QR auth page in browser"
     else
-      log "WARNING: 'open' command not found, cannot open browser"
+      log "WARNING: could not auto-open browser; open store/qr-auth.html manually"
     fi
 
     # Poll for completion (120s, 2s intervals)
