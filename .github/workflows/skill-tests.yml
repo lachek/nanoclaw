@@ -5,7 +5,7 @@ on:
     branches: [main]
     paths:
       - 'skills-engine/**'
-      - '.claude/skills/**'
+      - '.codex/skills/**'
       - 'src/**'
 
 jobs:
@@ -59,7 +59,7 @@ jobs:
         run: |
           for skill in $(echo '${{ toJson(matrix.entry.skills) }}' | jq -r '.[]'); do
             echo "Applying skill: $skill"
-            npx tsx scripts/apply-skill.ts ".claude/skills/$skill"
+            npx tsx scripts/apply-skill.ts ".codex/skills/$skill"
           done
 
       - name: Run skill tests

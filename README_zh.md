@@ -3,7 +3,7 @@
 </p>
 
 <p align="center">
-  NanoClaw —— 您的专属 Claude 助手，在容器中安全运行。它轻巧易懂，并能根据您的个人需求灵活定制。
+  NanoClaw —— 您的专属 AI 助手，在容器中安全运行。它轻巧易懂，并能根据您的个人需求灵活定制。
 </p>
 
 <p align="center">
@@ -13,7 +13,7 @@
   <a href="repo-tokens"><img src="repo-tokens/badge.svg" alt="34.9k tokens, 17% of context window" valign="middle"></a>
 </p>
 
-**新功能：** 首个支持 [Agent Swarms（智能体集群）](https://code.claude.com/docs/en/agent-teams) 的 AI 助手。可轻松组建智能体团队，在您的聊天中高效协作。
+**新功能：** 首个支持 Agent Swarms（智能体集群）的 AI 助手。可轻松组建智能体团队，在您的聊天中高效协作。
 
 ## 我为什么创建这个项目
 
@@ -26,33 +26,33 @@ NanoClaw 用一个您能在 8 分钟内理解的代码库，为您提供了同�
 ```bash
 git clone https://github.com/qwibitai/nanoclaw.git
 cd nanoclaw
-claude
+codex
 ```
 
-然后运行 `/setup`（如果您在 Windows + WSL2 上运行，请使用 `/setup-windows`）。Claude Code 会处理一切：依赖安装、身份验证、容器设置、服务配置。
+然后运行 `/setup`（如果您在 Windows + WSL2 上运行，请使用 `/setup-windows`）。Codex CLI 会处理一切：依赖安装、身份验证、容器设置、服务配置。
 
 ## 设计哲学
 
-**小巧易懂：** 单一进程，少量源文件。无微服务、无消息队列、无复杂抽象层。让 Claude Code 引导您轻松上手。
+**小巧易懂：** 单一进程，少量源文件。无微服务、无消息队列、无复杂抽象层。让 Codex CLI 引导您轻松上手。
 
 **通过隔离保障安全:** 智能体运行在 Linux 容器（在 macOS 上是 Apple Container，或 Docker）中。它们只能看到被明确挂载的内容。即便通过 Bash 访问也十分安全，因为所有命令都在容器内执行，不会直接操作您的宿主机。
 
-**为单一用户打造:** 这不是一个框架，是一个完全符合我个人需求的、可工作的软件。您可以 Fork 本项目，然后让 Claude Code 根据您的精确需求进行修改和适配。
+**为单一用户打造:** 这不是一个框架，是一个完全符合我个人需求的、可工作的软件。您可以 Fork 本项目，然后让 Codex CLI 根据您的精确需求进行修改和适配。
 
 **定制即代码修改:** 没有繁杂的配置文件。想要不同的行为？直接修改代码。代码库足够小，这样做是安全的。
 
-**AI 原生:** 无安装向导(由 Claude Code 指导安装)。无需监控仪表盘，直接询问 Claude 即可了解系统状况。无调试工具(描述问题，Claude 会修复它)。
+**AI 原生:** 无安装向导(由 Codex CLI 指导安装)。无需监控仪表盘，直接询问智能体即可了解系统状况。无调试工具(描述问题，智能体会修复它)。
 
-**技能（Skills）优于功能（Features）:** 贡献者不应该向代码库添加新功能（例如支持 Telegram）。相反，他们应该贡献像 `/add-telegram` 这样的 [Claude Code 技能](https://code.claude.com/docs/en/skills)，这些技能可以改造您的 fork。最终，您得到的是只做您需要事情的整洁代码。
+**技能（Skills）优于功能（Features）:** 贡献者不应该向代码库添加新功能（例如支持 Telegram）。相反，他们应该贡献像 `/add-telegram` 这样的 Codex CLI 技能，这些技能可以改造您的 fork。最终，您得到的是只做您需要事情的整洁代码。
 
-**最好的工具套件，最好的模型:** 本项目运行在 Claude Agent SDK 之上，这意味着您直接运行的就是 Claude Code。工具套件至关重要。一个低效的工具套件会让再聪明的模型也显得迟钝，而一个优秀的套件则能赋予它们超凡的能力。Claude Code (在我看来) 是市面上最好的工具套件。
+**最好的工具套件，最好的模型:** 本项目运行在 Codex CLI 之上。工具套件至关重要。一个低效的工具套件会让再聪明的模型也显得迟钝，而一个优秀的套件则能赋予它们超凡的能力。Codex CLI (在我看来) 是市面上最好的工具套件。
 
 ## 功能支持
 
-- **WhatsApp 输入/输出** - 通过手机给 Claude 发消息
-- **隔离的群组上下文** - 每个群组都拥有独立的 `CLAUDE.md` 记忆和隔离的文件系统。它们在各自的容器沙箱中运行，且仅挂载所需的文件系统。
+- **WhatsApp 输入/输出** - 通过手机给智能体发消息
+- **隔离的群组上下文** - 每个群组都拥有独立的 `AGENTS.md` 记忆和隔离的文件系统。它们在各自的容器沙箱中运行，且仅挂载所需的文件系统。
 - **主频道** - 您的私有频道（self-chat），用于管理控制；其他所有群组都完全隔离
-- **计划任务** - 运行 Claude 的周期性作业，并可以给您回发消息
+- **计划任务** - 运行智能体的周期性作业，并可以给您回发消息
 - **网络访问** - 搜索和抓取网页内容
 - **容器隔离** - 智能体在 Apple Container (macOS) 或 Docker (macOS/Linux/Windows 通过 WSL2) 的沙箱中运行
 - **智能体集群（Agent Swarms）** - 启动多个专业智能体团队，协作完成复杂任务（首个支持此功能的个人 AI 助手）
@@ -77,7 +77,7 @@ claude
 
 ## 定制
 
-没有需要学习的配置文件。直接告诉 Claude Code 您想要什么：
+没有需要学习的配置文件。直接告诉 Codex CLI 您想要什么：
 
 - "把触发词改成 @Bob"
 - "记住以后回答要更简短直接"
@@ -86,13 +86,13 @@ claude
 
 或者运行 `/customize` 进行引导式修改。
 
-代码库足够小，Claude 可以安全地修改它。
+代码库足够小，Codex CLI 可以安全地修改它。
 
 ## 贡献
 
 **不要添加功能，而是添加技能。**
 
-如果您想添加 Telegram 支持，不要创建一个 PR 同时添加 Telegram 和 WhatsApp。而是贡献一个技能文件 (`.claude/skills/add-telegram/SKILL.md`)，教 Claude Code 如何改造一个 NanoClaw 安装以使用 Telegram。
+如果您想添加 Telegram 支持，不要创建一个 PR 同时添加 Telegram 和 WhatsApp。而是贡献一个技能文件 (`.codex/skills/add-telegram/SKILL.md`)，教 Codex CLI 如何改造一个 NanoClaw 安装以使用 Telegram。
 
 然后用户在自己的 fork 上运行 `/add-telegram`，就能得到只做他们需要事情的整洁代码，而不是一个试图支持所有用例的臃肿系统。
 
@@ -106,19 +106,19 @@ claude
 - `/add-discord` - 添加 Discord
 
 **会话管理**
-- `/add-clear` - 添加一个 `/clear` 命令，用于压缩会话（在同一会话中总结上下文，同时保留关键信息）。这需要研究如何通过 Claude Agent SDK 以编程方式触发压缩。
+- `/add-clear` - 添加一个 `/clear` 命令，用于压缩会话（在同一会话中总结上下文，同时保留关键信息）。这需要研究如何通过 Codex CLI SDK 以编程方式触发压缩。
 
 ## 系统要求
 
 - macOS、Linux 或 Windows（通过 WSL2）
 - Node.js 20+
-- [Claude Code](https://claude.ai/download)
+- [Codex CLI](https://github.com/openai/codex)
 - [Apple Container](https://github.com/apple/container) (macOS) 或 [Docker](https://docker.com/products/docker-desktop) (macOS/Linux/Windows 通过 WSL2 集成)
 
 ## 架构
 
 ```
-WhatsApp (baileys) --> SQLite --> 轮询循环 --> 容器 (Claude Agent SDK) --> 响应
+WhatsApp (baileys) --> SQLite --> 轮询循环 --> 容器 (Codex CLI) --> 响应
 ```
 
 单一 Node.js 进程。智能体在具有挂载目录的隔离 Linux 容器中执行。每个群组的消息队列都带有全局并发控制。通过文件系统进行进程间通信（IPC）。
@@ -132,7 +132,7 @@ WhatsApp (baileys) --> SQLite --> 轮询循环 --> 容器 (Claude Agent SDK) -->
 - `src/container-runner.ts` - 生成流式智能体容器
 - `src/task-scheduler.ts` - 运行计划任务
 - `src/db.ts` - SQLite 操作（消息、群组、会话、状态）
-- `groups/*/CLAUDE.md` - 各群组的记忆
+- `groups/*/AGENTS.md` - 各群组的记忆
 
 ## FAQ
 
@@ -158,15 +158,15 @@ Docker 提供跨平台支持（macOS、Linux，以及通过 WSL2 的 Windows）�
 
 **为什么没有配置文件？**
 
-我们不希望配置泛滥。每个用户都应该定制它，让代码完全符合他们的需求，而不是去配置一个通用的系统。如果您喜欢用配置文件，告诉 Claude 让它加上。
+我们不希望配置泛滥。每个用户都应该定制它，让代码完全符合他们的需求，而不是去配置一个通用的系统。如果您喜欢用配置文件，告诉 Codex CLI 让它加上。
 
 **我该如何调试问题？**
 
-问 Claude Code。"为什么计划任务没有运行？" "最近的日志里有什么？" "为什么这条消息没有得到回应？" 这就是 AI 原生的方法。
+问 Codex CLI。"为什么计划任务没有运行？" "最近的日志里有什么？" "为什么这条消息没有得到回应？" 这就是 AI 原生的方法。
 
 **为什么我的安装不成功？**
 
-我不知道。运行 `claude`，然后运行 `/debug`。如果 Claude 发现一个可能影响其他用户的问题，请开一个 PR 来修改 `SKILL.md` 安装文件。
+我不知道。运行 `codex`，然后运行 `/debug`。如果智能体发现一个可能影响其他用户的问题，请开一个 PR 来修改 `SKILL.md` 安装文件。
 
 **什么样的代码更改会被接受？**
 

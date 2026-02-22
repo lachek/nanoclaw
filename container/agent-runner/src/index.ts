@@ -16,7 +16,14 @@
 
 import fs from 'fs';
 import path from 'path';
-import { query, HookCallback, PreCompactHookInput, PreToolUseHookInput } from '@anthropic-ai/claude-agent-sdk';
+import { query } from '@openai/codex-sdk';
+
+// Hook types compatible with Codex CLI hook system
+type HookCallback = (input: any, toolUseId: any, context: any) => Promise<Record<string, any>>;
+interface PreCompactHookInput {
+  transcript_path?: string;
+  session_id?: string;
+}
 import { fileURLToPath } from 'url';
 
 interface ContainerInput {
@@ -184,29 +191,8 @@ function createPreCompactHook(): HookCallback {
   };
 }
 
-// Secrets to strip from Bash tool subprocess environments.
-// These are needed by claude-code for API auth but should never
-// be visible to commands Kit runs.
-const SECRET_ENV_VARS = ['ANTHROPIC_API_KEY', 'CLAUDE_CODE_OAUTH_TOKEN'];
-
-function createSanitizeBashHook(): HookCallback {
-  return async (input, _toolUseId, _context) => {
-    const preInput = input as PreToolUseHookInput;
-    const command = (preInput.tool_input as { command?: string })?.command;
-    if (!command) return {};
-
-    const unsetPrefix = `unset ${SECRET_ENV_VARS.join(' ')} 2>/dev/null; `;
-    return {
-      hookSpecificOutput: {
-        hookEventName: 'PreToolUse',
-        updatedInput: {
-          ...(preInput.tool_input as Record<string, unknown>),
-          command: unsetPrefix + command,
-        },
-      },
-    };
-  };
-}
+// Secret redaction is handled by /app/secret-wrapper.sh (shell wrapper)
+// injected via Codex CLI's shell configuration. See container/secret-wrapper.sh.
 
 function sanitizeFilename(summary: string): string {
   return summary
@@ -390,15 +376,15 @@ async function runQuery(
   let messageCount = 0;
   let resultCount = 0;
 
-  // Load global CLAUDE.md as additional system context (shared across all groups)
-  const globalClaudeMdPath = '/workspace/global/CLAUDE.md';
-  let globalClaudeMd: string | undefined;
-  if (!containerInput.isMain && fs.existsSync(globalClaudeMdPath)) {
-    globalClaudeMd = fs.readFileSync(globalClaudeMdPath, 'utf-8');
+  // Load global AGENTS.md as additional system context (shared across all groups)
+  const globalAgentsMdPath = '/workspace/global/AGENTS.md';
+  let globalAgentsMd: string | undefined;
+  if (!containerInput.isMain && fs.existsSync(globalAgentsMdPath)) {
+    globalAgentsMd = fs.readFileSync(globalAgentsMdPath, 'utf-8');
   }
 
   // Discover additional directories mounted at /workspace/extra/*
-  // These are passed to the SDK so their CLAUDE.md files are loaded automatically
+  // These are passed to the SDK so their AGENTS.md files are loaded automatically
   const extraDirs: string[] = [];
   const extraBase = '/workspace/extra';
   if (fs.existsSync(extraBase)) {
@@ -420,8 +406,8 @@ async function runQuery(
       additionalDirectories: extraDirs.length > 0 ? extraDirs : undefined,
       resume: sessionId,
       resumeSessionAt: resumeAt,
-      systemPrompt: globalClaudeMd
-        ? { type: 'preset' as const, preset: 'claude_code' as const, append: globalClaudeMd }
+      systemPrompt: globalAgentsMd
+        ? { type: 'preset' as const, preset: 'codex' as const, append: globalAgentsMd }
         : undefined,
       allowedTools: [
         'Bash',
@@ -450,7 +436,6 @@ async function runQuery(
       },
       hooks: {
         PreCompact: [{ hooks: [createPreCompactHook()] }],
-        PreToolUse: [{ matcher: 'Bash', hooks: [createSanitizeBashHook()] }],
       },
     }
   })) {

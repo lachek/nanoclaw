@@ -226,7 +226,7 @@ export async function rebase(newBasePath?: string): Promise<RebaseResult> {
         }
 
         if (mergeConflicts.length > 0) {
-          // Return with backup pending for Claude Code / user resolution
+          // Return with backup pending for Codex CLI / user resolution
           return {
             success: false,
             patchFile: patchPath,
